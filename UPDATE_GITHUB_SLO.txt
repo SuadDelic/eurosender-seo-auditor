@@ -1,0 +1,21 @@
+EUROSENDER SEO AUDITOR v1.3 – NAVODILA ZA POSODOBITEV
+
+Odpri: https://github.com/SuadDelic/eurosender-seo-auditor
+
+V koren repozitorija dodaj/zamenjaj TOČNO te 3 datoteke:
+1. streamlit_app.py   (zamenjaj staro)
+2. ai_engine.py       (zamenjaj staro)
+3. usage_guard.py     (nova datoteka)
+
+Na GitHubu klikni Commit changes. Nato odpri aplikacijo v Streamlit Cloud
+in uporabi Ctrl+Shift+R.
+
+V Streamlit Secrets ohrani obstoječi GEMINI_API_KEY (ničesar ne objavljaj na GitHub).
+
+Preizkus: 1 Eurosender URL + vključeni Gemini AI; nato še enkrat isti URL.
+Drugi identični rezultat naj pride iz 24-urnega predpomnilnika (če se vsebina
+medtem ni spremenila).
+
+Pomembno: demo limit je omejen na proces in ni garancija proti porabi
+celotne Googlove kvote. Za javno dolgotrajno uporabo bi bila primerna
+avtentikacija, trajne kvote in omejitve v samem Google projektu.

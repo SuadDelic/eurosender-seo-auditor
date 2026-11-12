@@ -26,12 +26,20 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(ai['recommendations'][0]['issue_code'],'MISSING_DESCRIPTION')
         rec['ai']=ai
         self.assertTrue(any(x['Suggested action']=='Draft a unique description.' for x in build_rows([rec])))
-    def test_transient_outage_fallback(self):
+    def test_transient_outage_retries_same_lite_model(self):
         client=Mock()
-        client.models.generate_content.side_effect=[RuntimeError('503 UNAVAILABLE'),RuntimeError('503 high demand'),Mock(text='{}')]
-        response, model=generate_with_retries(client, 'test', sleep=lambda seconds: None)
+        client.models.generate_content.side_effect=[RuntimeError('503 UNAVAILABLE'),Mock(text='{}')]
+        attempts=[]
+        response, model=generate_with_retries(client,'test',sleep=lambda seconds: None,before_attempt=lambda:attempts.append(1))
         self.assertEqual(model,'gemini-3.5-flash-lite')
-        self.assertEqual(client.models.generate_content.call_count,3)
+        self.assertEqual(client.models.generate_content.call_count,2)
+        self.assertEqual(len(attempts),2)
+    def test_rate_limit_does_not_retry_or_fallback(self):
+        client=Mock()
+        client.models.generate_content.side_effect=RuntimeError('429 RESOURCE_EXHAUSTED')
+        with self.assertRaisesRegex(RuntimeError,'429'):
+            generate_with_retries(client,'test',sleep=lambda seconds: None)
+        self.assertEqual(client.models.generate_content.call_count,1)
     def test_permission_error_no_fallback(self):
         client=Mock()
         client.models.generate_content.side_effect=RuntimeError('403 permission denied')

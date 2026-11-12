@@ -1,9 +1,10 @@
 """Eurosender SEO Content Auditor — public pages, bilingual UI, Excel reports."""
-import csv,io,os,json
+import csv,io,os,json,hashlib
 from datetime import datetime,timezone
 import streamlit as st
 from audit_engine import audit_live,audit_sample,build_rows,validate_url
-from ai_engine import improve_with_ai
+from ai_engine import improve_with_ai, DEFAULT_MODEL
+from usage_guard import ApiAttemptLimiter, DemoQuotaReached
 from report_xlsx import make_report,label_priority,label_issue
 
 WORDS={
@@ -11,7 +12,7 @@ WORDS={
  'headline':'🔎 SEO Content Auditor','tagline':'Eurosender · javne strani → SEO pregled → AI priporočila → pregledno Excel poročilo',
  'disclaimer':'Neodvisen projekt kandidata. Ni povezan z internimi sistemi podjetja Eurosender.',
  'settings':'⚙️ Nastavitve','language':'Jezik vmesnika','ai':'AI priporočila','enable':'Omogoči Gemini AI',
- 'help_ai':'Za AI priporočila potrebujete ključ Gemini API. Osnovni pregled deluje brez AI.',
+ 'help_ai':'Glavni model: Flash-Lite. Uporablja 24-urni predpomnilnik in omejitev novih AI zahtevkov.',
  'key':'Gemini API ključ','key_missing':'Dodajte Gemini API ključ. SEO pregled lahko še vedno opravite brez AI.',
  'scope':'Omejitve','guard':'Samo javni HTTPS URL-ji domen eurosender.com in blog.eurosender.com. Največ 10 URL-jev na analizo, največ 2 MB na stran. Brez prijave in brez zasebnih podatkov.',
  'scoring':'Rezultat je interna kontrolna ocena, NE Googlov SEO rezultat.',
@@ -28,12 +29,17 @@ WORDS={
  'csv':'⬇ Prenesi surovi CSV (za nadaljnjo obdelavo)','json':'⬇ Prenesi dokaze v JSON',
  'review':'AI predlogi zahtevajo pregled pred objavo. Orodje ne spreminja Eurosenderjevih strani.',
  'begin':'Izberite vhod in kliknite Zaženi SEO pregled.',
+ 'quota':'Demo zaščita: največ 3 AI strani na zagon, 12 dejanskih API zahtevkov na dan na strežniški proces. Ponovni pregledi iste vsebine se 24 ur pridobijo iz predpomnilnika.',
+ 'remaining':'Preostalih AI zahtevkov v lokalnem strežniškem števcu: {n} (ne prikazuje Googlove kvote).',
+ 'skipped':'AI analiza je omejena na prve 3 uspešno pregledane strani na zagon. Ostale dobijo običajni SEO pregled.',
+ 'quota_error':'Demo AI omejitev je dosežena. Poskusite kasneje ali uporabite že analiziran URL.',
+ 'cache_note':'AI odgovori za isto vsebino in jezik so 24 ur shranjeni v predpomnilniku. Model: '+ 'Flash-Lite.' ,
  },
 'en':{
  'headline':'🔎 SEO Content Auditor','tagline':'Eurosender · public pages → SEO audit → AI recommendations → formatted Excel report',
  'disclaimer':'Independent candidate project. Not connected to Eurosender internal systems.',
  'settings':'⚙️ Settings','language':'Interface language','ai':'AI recommendations','enable':'Enable Gemini AI',
- 'help_ai':'Gemini AI needs an API key. Rule-based checks work without AI.',
+ 'help_ai':'Primary model: Flash-Lite. Includes 24-hour caching and limits on new AI requests.',
  'key':'Gemini API key','key_missing':'Add a Gemini API key. SEO checks will work without one.',
  'scope':'Guardrails','guard':'Public HTTPS URLs at eurosender.com and blog.eurosender.com only. Up to 10 URLs per run, 2 MB per page. No login or private files.',
  'scoring':'The score is an internal checklist, NOT a Google SEO score.',
@@ -50,7 +56,30 @@ WORDS={
  'csv':'⬇ Download raw CSV (advanced)','json':'⬇ Download complete JSON evidence',
  'review':'AI suggestions require manual review before publishing. No website changes are made.',
  'begin':'Select an input and click Run SEO audit.',
+ 'quota':'Demo protection: at most 3 AI pages per run and 12 real API attempts per server process per UTC day. Identical content is cached for 24 hours.',
+ 'remaining':'AI calls left in local server counter: {n} (not the Google quota).',
+ 'skipped':'AI is limited to the first 3 successfully audited pages per run. Other pages still receive the rule-based SEO audit.',
+ 'quota_error':'Demo AI limit reached. Retry later or analyze previously cached content.',
+ 'cache_note':'AI responses are cached for 24 hours for identical content and language. Model: Flash-Lite.',
  }}
+
+@st.cache_resource
+def shared_limiter():
+    return ApiAttemptLimiter(daily_limit=12, minute_limit=8)
+
+@st.cache_data(ttl=86400, max_entries=250, show_spinner=False)
+def cached_ai(evidence_signature: str, language: str, model: str, _record: dict, _api_key: str):
+    # underscore arguments are intentionally omitted from the Streamlit cache key.
+    # This project scans public pages only, and the digest binds the cached result
+    # to the observed content and language without storing credentials.
+    return improve_with_ai(_record, _api_key, language=language, model=model,
+                           before_attempt=shared_limiter().consume)
+
+def signature_for_record(record: dict) -> str:
+    fields=('url','title','description','h1','canonical','word_count','content_excerpt','issues')
+    data={field:record.get(field) for field in fields}
+    raw=json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
 st.set_page_config(page_title='SEO Content Auditor | Eurosender',page_icon='🔎',layout='wide')
 with st.sidebar:
@@ -68,6 +97,8 @@ with st.sidebar:
         if not api_key: st.warning(t['key_missing'])
     st.divider()
     st.markdown('**'+t['scope']+'**');st.caption(t['guard']);st.caption(t['scoring'])
+    st.caption(t['quota'])
+    if use_ai: st.caption(t['remaining'].format(n=shared_limiter().remaining_today()))
 
 st.markdown('''<style>.hero{padding:22px 26px;background:linear-gradient(115deg,#132D54,#2366B0);border-radius:14px;color:white;margin-bottom:16px}.hero h1{color:white;font-size:2rem;margin:0 0 5px}.hero p{margin:0;color:#E3EDFF}</style>''',unsafe_allow_html=True)
 st.markdown(f'<div class="hero"><h1>{t["headline"]}</h1><p>{t["tagline"]}</p></div>',unsafe_allow_html=True)
@@ -95,10 +126,15 @@ if st.button(t['run'],type='primary',use_container_width=True):
             prog.empty()
         if use_ai and api_key:
             with st.spinner(t['loading']):
-                for r in results:
-                    if r.get('error'):continue
-                    try:r['ai']=improve_with_ai(r,api_key,language=code)
-                    except Exception as e:r['ai_error']=str(e)[:260]
+                successful=[r for r in results if not r.get('error')]
+                for r in successful[:3]:
+                    try:
+                        r['ai']=cached_ai(signature_for_record(r),code,DEFAULT_MODEL,r,api_key)
+                    except DemoQuotaReached:
+                        r['ai_error']=t['quota_error']
+                    except Exception as e:
+                        r['ai_error']=str(e)[:260]
+                for r in successful[3:]: r['ai_notice']=t['skipped']
         st.session_state['seo_records']=results
         st.session_state['last_audit']=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
@@ -128,6 +164,7 @@ if 'seo_records' in st.session_state:
                 if ai['suggested_meta_description'] and ai['suggested_meta_description'].strip()!=r['description'].strip():st.write('**'+t['proposed_desc']+':**',ai['suggested_meta_description'])
                 for sug in ai['recommendations']:st.markdown('- **'+label_issue(sug['issue_code'],code)+':** '+sug['action'])
             elif r.get('ai_error'):st.warning(t['gemini_error']+r['ai_error'])
+            elif r.get('ai_notice'):st.info(r['ai_notice'])
     st.subheader(t['export'])
     try:
         book=make_report(records,code)
@@ -140,4 +177,5 @@ if 'seo_records' in st.session_state:
             st.download_button(t['csv'],data='\ufeff'+buf.getvalue(),file_name='eurosender_seo_audit.csv',mime='text/csv')
         st.download_button(t['json'],data=json.dumps({'generated_at':st.session_state.get('last_audit'),'records':records},ensure_ascii=False,indent=2),file_name='eurosender_seo_audit.json',mime='application/json')
     st.info(t['review'])
+    st.caption(t['cache_note'])
 else:st.caption(t['begin'])

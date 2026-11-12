@@ -1,24 +1,29 @@
-# Eurosender SEO Content Auditor — v1.2
+# Eurosender AI SEO Content Auditor — v1.3
 
-**Independent candidate portfolio project; not affiliated with Eurosender.**
+Independent candidate portfolio project; **not affiliated with Eurosender**.
 
-## What's new in v1.2
+A public-URL SEO auditor with bilingual UI, grounded Gemini suggestions, and formatted XLSX export.
 
-- Slovenian / English user interface (select in sidebar).
-- Gemini summary and recommendations in the selected interface language. Original SEO titles/descriptions are kept in the source page language.
-- One-click formatted Excel workbook (.xlsx), with **Povzetek / Overview**, **Ugotovitve / Findings**, **SEO besedila / SEO copy** tabs. Styled headers, filtered findings, priorities, frozen panes, source URLs.
-- CSV/JSON remain optional advanced exports.
+## What's new in v1.3
 
-## Update an existing GitHub + Streamlit deployment
+- **Gemini 3.5 Flash-Lite is the primary (only) AI model.** Avoids switching back to Gemini 3.8 Flash, whose free daily quota was exhausted.
+- **24-hour shared Streamlit cache** of successful AI responses for *identical observed page content, same language and model*. Re-running a changed page or a different language may produce a new AI request. Cached responses are lost on certain Cloud restarts.
+- **Maximum 3 new AI page analyses per run** (all other pages still get rule-based SEO results).
+- **Best-effort per-process limits: 12 real Gemini API attempts per UTC day and 8 per minute.** Retries count as API attempts. When the limit is reached, SEO checks and Excel exports continue to work.
+- **503:** one retry on the same Flash-Lite model, counted against local quota; **429:** do not retry/fallback automatically.
+- Model results are labeled AI suggestions, not verified SEO issues.
 
-Upload / replace these **four files** in the root of your existing repository:
+## Update an existing deployment (v1.2 → v1.3)
 
-1. `streamlit_app.py`
-2. `ai_engine.py`
-3. `requirements.txt` (adds `xlsxwriter`)
-4. `report_xlsx.py` (new)
+In the GitHub repository root, replace the two existing files and upload one new file:
 
-GitHub can accept file uploads through **Add file → Upload files** and save them as a commit; Streamlit Cloud will automatically redeploy. Keep your `GEMINI_API_KEY` in Streamlit Cloud **App settings → Secrets**, not in GitHub. Do not upload `.env` or `.streamlit/secrets.toml`.
+1. `streamlit_app.py` — replace
+2. `ai_engine.py` — replace
+3. `usage_guard.py` — add (new)
+
+Click **Commit changes**. Streamlit Community Cloud should redeploy from `main`. No change to `requirements.txt` or your Streamlit Secrets is required. Confirm that the GitHub commit has been recorded before testing the public link.
+
+**Do not upload** `.env`, `.venv`, or `.streamlit/secrets.toml` with real credentials.
 
 ## Run locally
 
@@ -27,88 +32,24 @@ python -m pip install -r requirements.txt
 python -m streamlit run streamlit_app.py
 ```
 
-Choose Slovenščina in the sidebar, then choose Live Eurosender URLs or Synthetic demo page. To get AI recommendations, enable Gemini AI and provide your own API key. Export results using the primary Excel download button.
-
-## Honesty and limitations
-
-The audit reads public HTML, does rule-based on-page checks and optionally requests Gemini recommendations. It does **not** measure Google rankings, traffic, CWV or true business impact. Decorative images may appropriately use empty alt attributes, so flagged images require review. AI copy is a suggestion, not a confirmed SEO issue. Page fetching may be blocked by web servers. API failures may occur. This is a user-initiated audit, not an automatically scheduled recurring job.
-
-For a public deployment, consider access controls and/or API usage limits before inviting wide use; the owner bears Gemini API usage.
-
-# Eurosender SEO Content Auditor — candidate portfolio project
-
-**Independent project; not affiliated with Eurosender.** A repeatable marketing task: take public Eurosender page URLs, perform deterministic on-page checks, optionally use Gemini to formulate grounded optimization suggestions, and export an Excel-ready CSV plus a JSON audit trail.
-
-## Features
-- Live public HTTPS URLs on `eurosender.com`, `www.eurosender.com`, `blog.eurosender.com` only (max 10/run).
-- Redirect and public-DNS restrictions, response size/time limits and content-type checks.
-- Extracts HTML title, meta description, H1, canonical, robots, alt text, internal links, main visible text.
-- Priority-ranked rules; **checklist score is not a Google SEO score**.
-- Optional Gemini-generated recommendations grounded in extracted evidence; clear warnings if AI unavailable.
-- Excel-compatible UTF-8 BOM CSV + structured JSON exports.
-- Clearly labeled synthetic fixture for a guaranteed reproducible demonstration.
-
-## Run locally (Windows PowerShell)
-
-Install Python 3.11/3.12, unzip project and open a terminal **inside** the project directory:
-
-```powershell
-py -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements.txt
-python -m streamlit run streamlit_app.py
-```
-
-Open the localhost address printed in the terminal (normally `http://localhost:8501`). If PowerShell blocks activating venv, run `.venv\Scripts\python.exe -m pip install -r requirements.txt` followed by `.venv\Scripts\python.exe -m streamlit run streamlit_app.py`.
-
-### AI credentials
-Generate your own Gemini key at https://aistudio.google.com/app/apikey . Set it in Streamlit's sidebar for a personal local session, or set an environment variable `GEMINI_API_KEY`. For Community Cloud deployment, place it in **App > Settings > Secrets** in TOML form:
+Gemini key (Streamlit Cloud > App settings > Secrets):
 
 ```toml
-GEMINI_API_KEY = "your-key-here"
+GEMINI_API_KEY = "your-secret-key"
 ```
 
-Do not commit `.streamlit/secrets.toml` or publish your key in a GitHub repository. The app can do rule-based scans without a key, **but AI recommendations require the API**. Gemini calls may incur fees or quota limits depending on your account and model availability.
+You can run deterministic SEO checks and download XLSX without any AI key.
 
-## Deploy to a public Streamlit URL
+## Limits to explain honestly at the interview
 
-1. Create a GitHub account and a **new public repository**, e.g. `eurosender-seo-auditor`.
-2. Upload the **contents** of the extracted project into the repository root (`streamlit_app.py` must be at the root), not a wrapping directory. Never upload secrets.
-3. Go to https://share.streamlit.io and sign in with GitHub.
-4. Choose **Create app > Yup, I have an app**. Select the repository, `main` branch, `streamlit_app.py` entrypoint.
-5. Open **Advanced settings**, pick Python 3.12, optionally add `GEMINI_API_KEY = "..."` to secrets, then deploy.
-6. Copy the allocated `*.streamlit.app` URL for the application. Without configured Gemini credentials, AI remains off but rule-based checks and demo mode run.
-7. Test the live URL in an incognito window. Run the **Synthetic demo page** first, then 1 or 2 actual Eurosender URLs, then export the CSV.
+- The included throttling is **in-memory per Streamlit server process**, not a durable project-wide or per-user billing cap. Restart/redeployment resets it; multiple processes could have separate counters. Google's real rate limits and costs still apply. For public production use, add authentication, durable shared quotas and API-side budget controls.
+- The cached AI output is **not refreshed** for unchanged observed inputs for up to 24 hours. The app still fetches the live HTML to compute SEO signals on every audit.
+- The system analyzes downloaded public HTML, not Search Console, rankings, traffic, JS-rendered content, or actual business impact.
+- Decorative images legitimately can have empty alt attributes and always need human review before treating a flag as an SEO issue.
+- Site changes and content suggestions aren't automatically published.
 
-**Public app key security:** if you configure a secret Gemini key in a public app, anyone with access to the app may trigger requests billed/charged to your account. For interview deployment, consider running with AI disabled by default, setting quotas, limiting usage or keeping AI-enabled deployment private. A key typed into the sidebar remains session-local.
-
-## Recommended 75-second screen recording
-
-1. Show `Eurosender SEO Content Auditor` homepage and explain input (10s).
-2. Switch to synthetic demo, click **Run SEO audit**, show factual findings (15s).
-3. Switch to a Eurosender live URL, run the scan and show true extracted signals (20s).
-4. If API configured, toggle Gemini AI, rerun and show suggestions (15s).
-5. Export CSV, open it in Excel, explain limitations (15s).
-
-## Interview description (English)
-
-> Marketing teams regularly review SEO landing pages, spending time copying HTML metadata, noting missing elements and manually compiling action lists. I built a Streamlit app that audits public Eurosender pages, prioritizes on-page SEO checklist findings, uses Gemini to draft evidence-grounded improvement suggestions, and exports an Excel-ready report. It requires no internal access and can be rerun on a new URL list. This is an independent candidate prototype, not a representation of Eurosender’s existing internal tooling.
-
-### What was tricky and what I'd improve
-
-- Some websites block scripted HTML requests or inject content with JavaScript; the app reports a fetch error instead of inventing data.
-- HTML extraction cannot establish Google indexing, search demand, ranking performance or Core Web Vitals. Heuristic thresholds generate review flags rather than definite SEO failures.
-- Gemini output can fail due to unavailable credentials, quotas or imperfect JSON. The scan remains usable even when AI is unavailable.
-- Future: scheduled change detection with page diffing, consented Search Console integration, robots.txt-aware crawling and human approval workflow.
-
-## Testing
+## Test
 
 ```bash
 python -m unittest discover -s tests -v
 ```
-
-No external API is contacted by unit tests; Gemini behavior is tested with a mock client.
-
-
-### API availability handling (v1.1)
-The app automatically retries transient Gemini HTTP 503 responses once after a short delay, then attempts `gemini-3.5-flash-lite` as fallback. Other errors (including authentication and quota failures) are surfaced rather than masked. Availability and free-tier access vary by API key.
