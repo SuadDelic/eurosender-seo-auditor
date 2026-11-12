@@ -1,3 +1,40 @@
+# Eurosender SEO Content Auditor — v1.2
+
+**Independent candidate portfolio project; not affiliated with Eurosender.**
+
+## What's new in v1.2
+
+- Slovenian / English user interface (select in sidebar).
+- Gemini summary and recommendations in the selected interface language. Original SEO titles/descriptions are kept in the source page language.
+- One-click formatted Excel workbook (.xlsx), with **Povzetek / Overview**, **Ugotovitve / Findings**, **SEO besedila / SEO copy** tabs. Styled headers, filtered findings, priorities, frozen panes, source URLs.
+- CSV/JSON remain optional advanced exports.
+
+## Update an existing GitHub + Streamlit deployment
+
+Upload / replace these **four files** in the root of your existing repository:
+
+1. `streamlit_app.py`
+2. `ai_engine.py`
+3. `requirements.txt` (adds `xlsxwriter`)
+4. `report_xlsx.py` (new)
+
+GitHub can accept file uploads through **Add file → Upload files** and save them as a commit; Streamlit Cloud will automatically redeploy. Keep your `GEMINI_API_KEY` in Streamlit Cloud **App settings → Secrets**, not in GitHub. Do not upload `.env` or `.streamlit/secrets.toml`.
+
+## Run locally
+
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run streamlit_app.py
+```
+
+Choose Slovenščina in the sidebar, then choose Live Eurosender URLs or Synthetic demo page. To get AI recommendations, enable Gemini AI and provide your own API key. Export results using the primary Excel download button.
+
+## Honesty and limitations
+
+The audit reads public HTML, does rule-based on-page checks and optionally requests Gemini recommendations. It does **not** measure Google rankings, traffic, CWV or true business impact. Decorative images may appropriately use empty alt attributes, so flagged images require review. AI copy is a suggestion, not a confirmed SEO issue. Page fetching may be blocked by web servers. API failures may occur. This is a user-initiated audit, not an automatically scheduled recurring job.
+
+For a public deployment, consider access controls and/or API usage limits before inviting wide use; the owner bears Gemini API usage.
+
 # Eurosender SEO Content Auditor — candidate portfolio project
 
 **Independent project; not affiliated with Eurosender.** A repeatable marketing task: take public Eurosender page URLs, perform deterministic on-page checks, optionally use Gemini to formulate grounded optimization suggestions, and export an Excel-ready CSV plus a JSON audit trail.

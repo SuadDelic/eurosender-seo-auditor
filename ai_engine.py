@@ -23,20 +23,22 @@ def generate_with_retries(client, prompt, primary_model=DEFAULT_MODEL, sleep=tim
     raise RuntimeError(f'Gemini models unavailable after retries: {str(last_error)[:220]}')
 
 
-def improve_with_ai(record:dict, api_key:str, model:str=DEFAULT_MODEL, client=None)->dict:
+def improve_with_ai(record:dict, api_key:str, model:str=DEFAULT_MODEL, client=None, language:str="sl")->dict:
     if not api_key and client is None: raise ValueError('Gemini API key is required for AI recommendations')
     if client is None:
         from google import genai
         client=genai.Client(api_key=api_key)
     evidence={key:record.get(key) for key in ('url','title','description','h1','canonical','word_count','content_excerpt','issues')}
     codes=[i['code'] for i in record.get('issues',[])]
+    lang_instruction = ('Write the summary and recommendation action text in Slovenian (sl-SI). ' if language=='sl' else 'Write the summary and recommendation action text in English. ')
     prompt=(
         'You are an SEO analyst reviewing a PUBLIC Eurosender webpage. Return ONLY a valid JSON object with keys '
         '"summary" (one or two sentences), "suggested_title" (string), "suggested_meta_description" (string), '
-        '"recommendations" (array of objects with "issue_code" and "action"). '
+        '"recommendations" (array of objects with "issue_code" and "action"). ' +
+        lang_instruction + 'Do not translate the current page title or its meta description; suggested SEO title and description must stay in the ORIGINAL LANGUAGE of the webpage. If no change is justified, return empty strings for suggested_title and suggested_meta_description. ' +
         'Use only the supplied observed evidence; do not claim you measured rankings, traffic, page speed, conversion, '
         'search volume, actual Google indexation, or competitors. Do not invent shipping rates, delivery times, guarantees, '
-        'business facts or product features. Keep suggestions usable and cautious, in English. '
+        'business facts or product features. Keep suggestions usable and cautious. '
         'Each issue_code must be in this list: '+json.dumps(codes)+'. '
         'If the main content is insufficient, do not fabricate page text. '
         'Evidence:\n'+json.dumps(evidence,ensure_ascii=False)
